@@ -1,0 +1,325 @@
+<!doctype html>
+
+<html lang="en">
+
+<head>
+
+  <meta charset="utf-8" />
+
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <title>Live Bus Times</title>
+
+
+
+  <style>
+
+    body {
+
+      margin: 0;
+
+      font-family: Arial, sans-serif;
+
+      background: #0b0f14;
+
+      color: #ffffff;
+
+    }
+
+    .wrap {
+
+      padding: 30px;
+
+    }
+
+    .title {
+
+      font-size: 44px;
+
+      font-weight: 700;
+
+      margin-bottom: 6px;
+
+    }
+
+    .subtitle {
+
+      font-size: 20px;
+
+      opacity: 0.8;
+
+      margin-bottom: 18px;
+
+      display: flex;
+
+      gap: 12px;
+
+      align-items: center;
+
+      flex-wrap: wrap;
+
+    }
+
+    .pill {
+
+      font-size: 14px;
+
+      padding: 6px 10px;
+
+      border-radius: 999px;
+
+      background: rgba(255,255,255,0.12);
+
+      opacity: 0.95;
+
+    }
+
+    .row {
+
+      display: flex;
+
+      padding: 18px 0;
+
+      border-top: 1px solid rgba(255,255,255,0.10);
+
+      align-items: center;
+
+      gap: 16px;
+
+    }
+
+    .bus {
+
+      font-size: 48px;
+
+      font-weight: 800;
+
+      width: 120px;
+
+      flex: 0 0 auto;
+
+    }
+
+    .dest {
+
+      font-size: 30px;
+
+      flex: 1 1 auto;
+
+      min-width: 0;
+
+      overflow: hidden;
+
+      text-overflow: ellipsis;
+
+      white-space: nowrap;
+
+    }
+
+    .eta {
+
+      font-size: 34px;
+
+      font-weight: 800;
+
+      width: 140px;
+
+      text-align: right;
+
+      flex: 0 0 auto;
+
+    }
+
+    .small {
+
+      font-size: 16px;
+
+      opacity: 0.6;
+
+      margin-top: 18px;
+
+    }
+
+  </style>
+
+</head>
+
+
+
+<body>
+
+  <div class="wrap">
+
+    <div class="title" id="stopName">Live Bus Times</div>
+
+
+
+    <div class="subtitle">
+
+      <span id="stopMeta">Stop B — Enfield Lock Station</span>
+
+      <span class="pill" id="statusPill">Loading…</span>
+
+    </div>
+
+
+
+    <div id="list"></div>
+
+
+
+    <div class="small">Auto refresh every 20 seconds</div>
+
+  </div>
+
+
+
+  <script>
+
+    // ✅ Your stop point (from your TfL response)
+
+    const STOP_ID = "490001100B"; // Enfield Lock Station, Platform/Stop B
+
+    const REFRESH_MS = 20000;
+
+
+
+    function mins(seconds) {
+
+      const m = Math.round((seconds || 0) / 60);
+
+      if (m <= 0) return "Due";
+
+      return m + " min";
+
+    }
+
+
+
+    function setStatus(text) {
+
+      document.getElementById("statusPill").textContent = text;
+
+    }
+
+
+
+    async function loadBus() {
+
+      const list = document.getElementById("list");
+
+
+
+      try {
+
+        setStatus("Updating…");
+
+
+
+        // Use AllOrigins as a simple CORS helper for browser signage
+
+        const tflUrl = `https://api.tfl.gov.uk/StopPoint/${STOP_ID}/Arrivals`;
+
+        const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(tflUrl)}`;
+
+
+
+        const res = await fetch(url, { cache: "no-store" });
+
+        if (!res.ok) throw new Error("HTTP " + res.status);
+
+
+
+        const data = await res.json();
+
+        data.sort((a, b) => (a.timeToStation || 0) - (b.timeToStation || 0));
+
+
+
+        // Update header from live data (if present)
+
+        if (data[0]) {
+
+          const station = data[0].stationName || "Live Bus Times";
+
+          const plat = data[0].platformName ? `Stop / Platform ${data[0].platformName}` : "";
+
+          document.getElementById("stopName").textContent = station;
+
+          document.getElementById("stopMeta").textContent = plat ? plat : "Live arrivals";
+
+        }
+
+
+
+        if (!data.length) {
+
+          list.innerHTML =
+
+            `<div class="row">
+
+              <div class="dest">No buses currently</div>
+
+              <div class="eta">—</div>
+
+            </div>`;
+
+          setStatus("No data");
+
+          return;
+
+        }
+
+
+
+        // Show the next 6
+
+        list.innerHTML = data.slice(0, 6).map(bus => `
+
+          <div class="row">
+
+            <div class="bus">${bus.lineName || ""}</div>
+
+            <div class="dest">${bus.destinationName || bus.towards || ""}</div>
+
+            <div class="eta">${mins(bus.timeToStation)}</div>
+
+          </div>
+
+        `).join("");
+
+
+
+        const now = new Date();
+
+        setStatus("Updated " + now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+
+      } catch (e) {
+
+        list.innerHTML =
+
+          `<div class="row">
+
+            <div class="dest">Error loading bus times</div>
+
+            <div class="eta">—</div>
+
+          </div>`;
+
+        setStatus("Offline");
+
+      }
+
+    }
+
+
+
+    loadBus();
+
+    setInterval(loadBus, REFRESH_MS);
+
+  </script>
+
+</body>
+
+</html>
